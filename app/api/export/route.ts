@@ -16,7 +16,6 @@ export async function POST(request: Request) {
     // Get site info for filename
     const site = await prisma.site.findUnique({
       where: { id: siteId },
-      select: { slug: true },
     });
 
     if (!site) {
