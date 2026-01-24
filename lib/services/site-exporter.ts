@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db/prisma";
+import { prisma } from "@/lib/db/memory-store";
 import type { AgentProfile } from "./jina-scraper";
 import type { GeneratedContent } from "./openai-generator";
 import type { Customization } from "@/types/site";

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateStaticHtml } from "@/lib/services/site-exporter";
-import { prisma } from "@/lib/db/prisma";
+import { prisma } from "@/lib/db/memory-store";
 
 export async function POST(request: Request) {
   try {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateSiteContent } from "@/lib/services/openai-generator";
-import { prisma } from "@/lib/db/prisma";
+import { prisma } from "@/lib/db/memory-store";
 import type { AgentProfile } from "@/lib/services/jina-scraper";
 
 export async function POST(request: Request) {

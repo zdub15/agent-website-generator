@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
+import { prisma } from "@/lib/db/memory-store";
 import { scrapeAgentProfile } from "@/lib/services/jina-scraper";
 import { downloadAndSaveImage } from "@/lib/services/image-downloader";
 
@@ -71,6 +71,8 @@ export async function POST(request: Request) {
         scrapedData: JSON.stringify(profile),
         status: "DRAFT",
         headshotUrl: localHeadshotUrl || profile.headshotUrl,
+        generatedContent: null,
+        calendlyUrl: null,
         customization: JSON.stringify({
           primaryColor: "#003478",
           secondaryColor: "#ffc440",
