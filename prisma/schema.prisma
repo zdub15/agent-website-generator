@@ -1,0 +1,28 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Site {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  status           String   @default("DRAFT") // DRAFT, GENERATING, PREVIEW, PUBLISHED
+  sourceUrl        String   // ushagent.com URL
+  scrapedData      String   // JSON blob - raw scraped data
+  generatedContent String?  // JSON blob - AI-generated content
+  customization    String?  // JSON blob - theme, stats, overrides
+  headshotUrl      String?
+  calendlyUrl      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([status])
+}
