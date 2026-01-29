@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db/memory-store";
+import { prisma } from "@/lib/db/blob-store";
 
 // GET - Get single site
 export async function GET(

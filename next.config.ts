@@ -27,8 +27,21 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "*.cloudfront.net",
       },
+      {
+        protocol: "https",
+        hostname: "*.vercel-storage.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.public.blob.vercel-storage.com",
+      },
     ],
   },
+  // Required for puppeteer-core and chromium to work in serverless
+  serverExternalPackages: [
+    "puppeteer-core",
+    "@sparticuz/chromium-min",
+  ],
 };
 
 export default nextConfig;

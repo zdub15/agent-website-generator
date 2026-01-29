@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db/memory-store";
+import { prisma } from "@/lib/db/blob-store";
 import { scrapeAgentProfile } from "@/lib/services/jina-scraper";
 import { downloadAndSaveImage } from "@/lib/services/image-downloader";
 

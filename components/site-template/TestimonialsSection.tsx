@@ -24,6 +24,12 @@ export function TestimonialsSection({
     <section id="testimonials" className="py-20">
       <div className="container mx-auto px-4">
         <div className="text-center max-w-3xl mx-auto mb-16">
+          <div
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium mb-4"
+            style={{ backgroundColor: `${primaryColor}10`, color: primaryColor }}
+          >
+            Client Reviews
+          </div>
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             What Our Clients Say
           </h2>

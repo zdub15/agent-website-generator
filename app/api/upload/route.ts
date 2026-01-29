@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db/memory-store";
+import { prisma } from "@/lib/db/blob-store";
 import { mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";

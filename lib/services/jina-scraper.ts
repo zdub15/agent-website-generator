@@ -1,4 +1,6 @@
 import { scrapeHeadshotWithPuppeteer } from "./puppeteer-scraper";
+import { scrapeHeadshotServerless } from "./serverless-scraper";
+import { processHeadshotImage } from "./image-downloader";
 
 export interface AgentProfile {
   name: string;
@@ -13,6 +15,56 @@ export interface AgentProfile {
   headshotUrl: string | null;
 }
 
+// Check if we're on Vercel
+const isVercel = process.env.VERCEL === "1";
+
+// Try to download and save an image with processing
+async function tryDownloadAndSaveImage(imageUrl: string, slug: string): Promise<string | null> {
+  try {
+    console.log("Attempting to download image:", imageUrl);
+
+    const response = await fetch(imageUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "image/*",
+      },
+    });
+
+    if (!response.ok) {
+      console.log("Failed to download:", response.status);
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType?.startsWith("image/")) {
+      console.log("Not an image:", contentType);
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    if (buffer.length < 5000) {
+      console.log("Image too small:", buffer.length, "bytes");
+      return null;
+    }
+
+    console.log("Downloaded image:", buffer.length, "bytes");
+
+    // Use processHeadshotImage for cropping, upscaling, and quality enhancement
+    const processedUrl = await processHeadshotImage(buffer, slug);
+    if (processedUrl) {
+      console.log("Image processed and saved:", processedUrl);
+      return processedUrl;
+    }
+
+    return imageUrl; // Return original URL if processing fails
+  } catch (error) {
+    console.log("Error downloading image:", error);
+    return null;
+  }
+}
+
 export async function scrapeAgentProfile(profileUrl: string): Promise<AgentProfile> {
   // Validate URL format
   if (!profileUrl.includes("ushagent.com") && !profileUrl.includes("ushealthgroup.com")) {
@@ -22,7 +74,12 @@ export async function scrapeAgentProfile(profileUrl: string): Promise<AgentProfi
   // Normalize URL
   const normalizedUrl = profileUrl.startsWith("http") ? profileUrl : `https://${profileUrl}`;
 
-  // Call Jina AI Reader with API key
+  // Generate slug for filename
+  const urlMatch = normalizedUrl.match(/ushagent\.com\/([A-Za-z]+)/i);
+  const slug = urlMatch ? urlMatch[1].toLowerCase() : "agent";
+  const agentCode = urlMatch ? urlMatch[1].toUpperCase() : "";
+
+  // Call Jina AI Reader with API key - use wait selector for JS-rendered content
   const jinaUrl = `https://r.jina.ai/${normalizedUrl}`;
   const apiKey = process.env.JINA_API_KEY;
 
@@ -37,6 +94,8 @@ export async function scrapeAgentProfile(profileUrl: string): Promise<AgentProfi
       Authorization: `Bearer ${apiKey}`,
       "X-With-Links-Summary": "true",
       "X-With-Images-Summary": "true",
+      "X-Wait-For-Selector": "img",
+      "X-Timeout": "45",
     },
   });
 
@@ -56,27 +115,128 @@ export async function scrapeAgentProfile(profileUrl: string): Promise<AgentProfi
     profile.headshotUrl.includes("blob:") ||
     profile.headshotUrl.includes(".svg") ||
     profile.headshotUrl.includes(".gif") ||
-    profile.headshotUrl.includes("trustedform")
+    profile.headshotUrl.includes("trustedform") ||
+    profile.headshotUrl.includes("logo") ||
+    profile.headshotUrl.includes("icon")
   )) {
     console.log("Invalid headshot URL detected, clearing:", profile.headshotUrl);
     profile.headshotUrl = null;
   }
 
-  // If no valid headshot found, use Puppeteer to scrape it
-  if (!profile.headshotUrl) {
-    console.log("No valid headshot found, attempting Puppeteer scrape...");
+  // Try to download and process the headshot if we have a URL
+  if (profile.headshotUrl) {
+    const savedUrl = await tryDownloadAndSaveImage(profile.headshotUrl, slug);
+    if (savedUrl) {
+      profile.headshotUrl = savedUrl;
+    }
+  }
 
-    // Generate slug from name or URL
-    const urlMatch = normalizedUrl.match(/ushagent\.com\/([A-Za-z]+)/i);
-    const slug = urlMatch
-      ? urlMatch[1].toLowerCase()
-      : profile.name.toLowerCase().replace(/\s+/g, "-");
+  // If no headshot yet, try known ushagent.com image URL patterns
+  if (!profile.headshotUrl && agentCode) {
+    console.log("Trying known URL patterns for agent:", agentCode);
+
+    // Known patterns for ushagent.com profile images
+    const possibleUrls = [
+      `https://www.ushagent.com/Images/AgentPhotos/${agentCode}.jpg`,
+      `https://www.ushagent.com/Images/AgentPhotos/${agentCode}.png`,
+      `https://www.ushagent.com/images/agentphotos/${agentCode.toLowerCase()}.jpg`,
+      `https://www.ushagent.com/Content/AgentPhotos/${agentCode}.jpg`,
+      `https://cdn.ushagent.com/photos/${agentCode}.jpg`,
+    ];
+
+    for (const url of possibleUrls) {
+      const savedUrl = await tryDownloadAndSaveImage(url, slug);
+      if (savedUrl) {
+        profile.headshotUrl = savedUrl;
+        console.log("Found headshot at:", url);
+        break;
+      }
+    }
+  }
+
+  // If we have a base64 image in the markdown, process and save it
+  if (!profile.headshotUrl) {
+    // Look for base64 images - they sometimes appear inline
+    const base64Match = markdown.match(/data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]{1000,})/);
+    if (base64Match) {
+      console.log("Found base64 image in markdown, processing...");
+      try {
+        const imageBuffer = Buffer.from(base64Match[2], "base64");
+
+        if (imageBuffer.length > 5000) {
+          // Use processHeadshotImage for cropping, upscaling, and quality enhancement
+          const processedUrl = await processHeadshotImage(imageBuffer, slug);
+          if (processedUrl) {
+            profile.headshotUrl = processedUrl;
+            console.log("Markdown base64 headshot processed and saved:", processedUrl);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to process base64 image:", error);
+      }
+    }
+  }
+
+  // Try direct HTTP fetch to extract base64 image from HTML (faster than Puppeteer)
+  if (!profile.headshotUrl) {
+    console.log("Attempting direct HTML fetch to extract base64 headshot...");
+    try {
+      const htmlResponse = await fetch(normalizedUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept": "text/html",
+        },
+      });
+
+      if (htmlResponse.ok) {
+        const html = await htmlResponse.text();
+        // Look for the PersonalPic image with base64 data
+        const base64ImgMatch = html.match(/id="ContentPlaceHolder1_PAWdata_imgPersonalPic"[^>]*src="(data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+))"/);
+        if (base64ImgMatch) {
+          console.log("Found base64 headshot in HTML!");
+          const base64Content = base64ImgMatch[3];
+          const imageBuffer = Buffer.from(base64Content, "base64");
+
+          if (imageBuffer.length > 5000) {
+            // Use processHeadshotImage for cropping, upscaling, and quality enhancement
+            const processedUrl = await processHeadshotImage(imageBuffer, slug);
+            if (processedUrl) {
+              profile.headshotUrl = processedUrl;
+              console.log("Direct fetch base64 headshot processed and saved:", processedUrl);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.log("Direct HTML fetch failed:", error);
+    }
+  }
+
+  // If still no headshot on Vercel, try serverless Puppeteer (uses free GitHub CDN for Chromium)
+  if (!profile.headshotUrl && isVercel) {
+    console.log("No valid headshot found, attempting serverless Puppeteer scrape...");
+
+    const serverlessHeadshot = await scrapeHeadshotServerless(normalizedUrl, slug);
+    if (serverlessHeadshot) {
+      profile.headshotUrl = serverlessHeadshot;
+      console.log("Headshot scraped with serverless Puppeteer:", serverlessHeadshot);
+    }
+  }
+
+  // If still no headshot and not on Vercel, try Puppeteer
+  if (!profile.headshotUrl && !isVercel) {
+    console.log("No valid headshot found, attempting Puppeteer scrape...");
 
     const puppeteerHeadshot = await scrapeHeadshotWithPuppeteer(normalizedUrl, slug);
     if (puppeteerHeadshot) {
       profile.headshotUrl = puppeteerHeadshot;
       console.log("Headshot scraped with Puppeteer:", puppeteerHeadshot);
     }
+  }
+
+  // Log if no headshot found
+  if (!profile.headshotUrl) {
+    console.log("No headshot available - user can upload via customization page");
   }
 
   return profile;
@@ -268,72 +428,119 @@ function parseAgentMarkdown(markdown: string, sourceUrl: string): AgentProfile {
 
   // Extract headshot image URL from markdown
   // Jina returns images in markdown format: ![alt](url)
+  // Also check for Images Summary section at the end
   let headshotUrl: string | null = null;
 
   // Collect all image URLs from markdown
-  const allImageUrls: string[] = [];
+  const allImageUrls: { url: string; alt: string }[] = [];
 
+  // Get images from markdown image syntax
   for (const match of imageMatches) {
+    const alt = match[1] || "";
     const url = match[2];
     // IMPORTANT: Skip blob: URLs - these are browser-local and can't be fetched
     if (url && !url.startsWith("blob:") && !url.startsWith("data:")) {
-      allImageUrls.push(url);
+      allImageUrls.push({ url, alt });
     }
   }
 
-  // Also look for image URLs in plain text (sometimes CDN URLs appear without markdown)
-  const urlMatches = markdown.match(/https?:\/\/[^\s"'<>]+\.(jpg|jpeg|png|webp|gif)[^\s"'<>]*/gi);
-  if (urlMatches) {
-    for (const url of urlMatches) {
-      if (!url.startsWith("blob:") && !allImageUrls.includes(url)) {
-        allImageUrls.push(url);
+  // Look for Jina's Images Summary section (usually at the end)
+  const imagesSummaryMatch = markdown.match(/Images Summary[\s\S]*?(?:$|Links Summary)/i);
+  if (imagesSummaryMatch) {
+    console.log("Found Images Summary section");
+    const summaryUrls = imagesSummaryMatch[0].match(/https?:\/\/[^\s"'<>\]]+/gi);
+    if (summaryUrls) {
+      for (const url of summaryUrls) {
+        if (!url.startsWith("blob:") && !allImageUrls.find(i => i.url === url)) {
+          allImageUrls.push({ url, alt: "" });
+        }
       }
     }
   }
 
-  console.log("Found image URLs:", allImageUrls);
+  // Also look for image URLs in plain text (sometimes CDN URLs appear without markdown)
+  const urlMatches = markdown.match(/https?:\/\/[^\s"'<>\]]+\.(jpg|jpeg|png|webp)[^\s"'<>\]]*/gi);
+  if (urlMatches) {
+    for (const url of urlMatches) {
+      if (!url.startsWith("blob:") && !allImageUrls.find(i => i.url === url)) {
+        allImageUrls.push({ url, alt: "" });
+      }
+    }
+  }
 
-  // Priority 1: Look for profile/headshot specific images
-  for (const url of allImageUrls) {
-    const lowerUrl = url.toLowerCase();
+  console.log("Found image URLs:", allImageUrls.map(i => i.url));
+
+  // Priority 1: Look for images with "PersonalPic" or similar in URL (ushagent specific)
+  for (const img of allImageUrls) {
+    const lowerUrl = img.url.toLowerCase();
     if (
-      lowerUrl.includes("profile") ||
-      lowerUrl.includes("headshot") ||
-      lowerUrl.includes("agent") ||
-      lowerUrl.includes("photo") ||
-      lowerUrl.includes("picture") ||
-      lowerUrl.includes("portrait")
+      lowerUrl.includes("personalpic") ||
+      lowerUrl.includes("agentphoto") ||
+      lowerUrl.includes("profilepic")
     ) {
-      headshotUrl = url;
+      headshotUrl = img.url;
+      console.log("Found personal pic URL:", headshotUrl);
       break;
     }
   }
 
-  // Priority 2: Look for CDN-hosted images (likely profile photos)
+  // Priority 2: Look for profile/headshot specific images by URL or alt text
   if (!headshotUrl) {
-    for (const url of allImageUrls) {
-      const lowerUrl = url.toLowerCase();
+    for (const img of allImageUrls) {
+      const lowerUrl = img.url.toLowerCase();
+      const lowerAlt = img.alt.toLowerCase();
+      if (
+        lowerUrl.includes("profile") ||
+        lowerUrl.includes("headshot") ||
+        lowerUrl.includes("photo") ||
+        lowerUrl.includes("picture") ||
+        lowerUrl.includes("portrait") ||
+        lowerAlt.includes("profile") ||
+        lowerAlt.includes("photo") ||
+        lowerAlt.includes("headshot")
+      ) {
+        // Skip if it's a logo
+        if (!lowerUrl.includes("logo") && !lowerAlt.includes("logo")) {
+          headshotUrl = img.url;
+          break;
+        }
+      }
+    }
+  }
+
+  // Priority 3: Look for CDN-hosted images (likely profile photos)
+  if (!headshotUrl) {
+    for (const img of allImageUrls) {
+      const lowerUrl = img.url.toLowerCase();
       if (
         (lowerUrl.includes("cloudinary") ||
          lowerUrl.includes("amazonaws") ||
          lowerUrl.includes("cloudfront") ||
          lowerUrl.includes("imgix") ||
-         lowerUrl.includes("blob.core")) &&
+         lowerUrl.includes("blob.core") ||
+         lowerUrl.includes("azurewebsites")) &&
         !lowerUrl.includes("logo") &&
         !lowerUrl.includes("icon")
       ) {
-        headshotUrl = url;
+        headshotUrl = img.url;
         break;
       }
     }
   }
 
-  // Priority 3: First non-logo/icon image
+  // Priority 4: First JPG/PNG image that's not a logo/icon
   if (!headshotUrl) {
-    for (const url of allImageUrls) {
-      const lowerUrl = url.toLowerCase();
-      if (!lowerUrl.includes("logo") && !lowerUrl.includes("icon") && !lowerUrl.includes(".svg")) {
-        headshotUrl = url;
+    for (const img of allImageUrls) {
+      const lowerUrl = img.url.toLowerCase();
+      if (
+        (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg") || lowerUrl.endsWith(".png")) &&
+        !lowerUrl.includes("logo") &&
+        !lowerUrl.includes("icon") &&
+        !lowerUrl.includes(".svg") &&
+        !lowerUrl.includes("trustedform") &&
+        !lowerUrl.includes("tracking")
+      ) {
+        headshotUrl = img.url;
         break;
       }
     }

@@ -2,6 +2,18 @@
 
 # dependencies
 /node_modules
+
+# database
+*.db
+*.sqlite
+*.sqlite3
+
+# debug files
+debug-*
+nul
+
+# uploads (user-generated)
+/public/uploads
 /.pnp
 .pnp.*
 .yarn/*
@@ -41,3 +53,5 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+.vercel

@@ -46,24 +46,20 @@ export function HeroSection({
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-10">
             <Button
               size="lg"
-              className="text-lg px-8 py-6 font-semibold"
+              className="text-lg px-8 py-6 font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105"
               style={{ backgroundColor: secondaryColor, color: primaryColor }}
               asChild
             >
               <a href="#contact">Request Free Quote</a>
             </Button>
             {phone && (
-              <Button
-                size="lg"
-                variant="outline"
-                className="text-lg px-8 py-6 font-semibold border-white text-white hover:bg-white/10"
-                asChild
+              <a
+                href={`tel:${phone.replace(/[^\d]/g, "")}`}
+                className="inline-flex items-center justify-center gap-2 text-lg px-8 py-4 font-semibold rounded-lg border-2 border-white text-white bg-white/10 backdrop-blur-sm hover:bg-white/20 transition-all hover:scale-105"
               >
-                <a href={`tel:${phone.replace(/[^\d]/g, "")}`}>
-                  <Phone className="w-5 h-5 mr-2" />
-                  Call {phone}
-                </a>
-              </Button>
+                <Phone className="w-5 h-5" />
+                <span>Call {phone}</span>
+              </a>
             )}
           </div>
 
