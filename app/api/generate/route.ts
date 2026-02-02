@@ -3,6 +3,9 @@ import { generateSiteContent } from "@/lib/services/openai-generator";
 import { prisma } from "@/lib/db/blob-store";
 import type { AgentProfile } from "@/lib/services/jina-scraper";
 
+// Extend timeout for AI generation
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
     let body;

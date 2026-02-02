@@ -3,6 +3,9 @@ import { prisma } from "@/lib/db/blob-store";
 import { scrapeAgentProfile } from "@/lib/services/jina-scraper";
 import { downloadAndSaveImage } from "@/lib/services/image-downloader";
 
+// Extend timeout for scraping operations
+export const maxDuration = 60;
+
 function generateSlug(name: string): string {
   return name
     .toLowerCase()
@@ -30,7 +33,16 @@ export async function GET() {
 // POST - Create new site from URL
 export async function POST(request: Request) {
   try {
-    const { profileUrl } = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+    const { profileUrl } = body;
 
     if (!profileUrl) {
       return NextResponse.json(
