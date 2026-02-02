@@ -20,6 +20,15 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
+function safeJsonParse<T>(data: string | null | undefined): T | null {
+  if (!data) return null;
+  try {
+    return JSON.parse(data) as T;
+  } catch {
+    return null;
+  }
+}
+
 export default async function SitePage({ params }: PageProps) {
   const { slug } = await params;
 
@@ -31,18 +40,34 @@ export default async function SitePage({ params }: PageProps) {
     notFound();
   }
 
-  const scrapedData = JSON.parse(site.scrapedData) as AgentProfile;
-  const generatedContent = site.generatedContent
-    ? (JSON.parse(site.generatedContent) as GeneratedContent)
-    : null;
-  const customization = site.customization
-    ? (JSON.parse(site.customization) as Customization)
-    : {
-        primaryColor: "#003478",
-        secondaryColor: "#ffc440",
-        accentColor: "#042b2b",
-        fontFamily: "Inter",
-      };
+  const scrapedData = safeJsonParse<AgentProfile>(site.scrapedData);
+
+  if (!scrapedData) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Site Data Error</h1>
+          <p className="text-gray-600 mb-4">
+            This site has corrupted data and cannot be displayed. Please contact support or try recreating the site.
+          </p>
+          <a
+            href="/"
+            className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Return to Dashboard
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  const generatedContent = safeJsonParse<GeneratedContent>(site.generatedContent);
+  const customization = safeJsonParse<Customization>(site.customization) || {
+    primaryColor: "#003478",
+    secondaryColor: "#ffc440",
+    accentColor: "#042b2b",
+    fontFamily: "Inter",
+  };
 
   // Use generated content or defaults
   const content = generatedContent || {

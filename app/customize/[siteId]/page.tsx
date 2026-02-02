@@ -28,10 +28,26 @@ export default function CustomizePage() {
     try {
       const res = await fetch(`/api/sites/${siteId}`);
       if (!res.ok) {
+        console.error("Failed to fetch site:", res.status, res.statusText);
         router.push("/");
         return;
       }
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error("Failed to parse site response:", parseError, "Response:", text.substring(0, 200));
+        router.push("/");
+        return;
+      }
+
+      if (data.error) {
+        console.error("Site error:", data.error);
+        router.push("/");
+        return;
+      }
+
       setSite(data);
 
       // Load customization into store
@@ -41,7 +57,7 @@ export default function CustomizePage() {
           familiesHelped: data.customization.stats?.familiesHelped || "150+",
           satisfactionRate: data.customization.stats?.satisfactionRate || "98%",
           coverageIssued: data.customization.stats?.coverageIssued || "$1M+",
-          calendlyUrl: data.site.calendlyUrl || "",
+          calendlyUrl: data.site?.calendlyUrl || "",
         });
       }
     } catch (error) {

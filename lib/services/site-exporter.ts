@@ -11,6 +11,15 @@ interface SiteExportData {
   headshotUrl: string | null;
 }
 
+function safeJsonParse<T>(data: string | null | undefined): T | null {
+  if (!data) return null;
+  try {
+    return JSON.parse(data) as T;
+  } catch {
+    return null;
+  }
+}
+
 export async function generateStaticHtml(siteId: string): Promise<string> {
   const site = await prisma.site.findUnique({
     where: { id: siteId },
@@ -20,13 +29,13 @@ export async function generateStaticHtml(siteId: string): Promise<string> {
     throw new Error("Site not found");
   }
 
-  const agent = JSON.parse(site.scrapedData) as AgentProfile;
-  const content = site.generatedContent
-    ? (JSON.parse(site.generatedContent) as GeneratedContent)
-    : getDefaultContent(agent);
-  const customization = site.customization
-    ? (JSON.parse(site.customization) as Customization)
-    : getDefaultCustomization();
+  const agent = safeJsonParse<AgentProfile>(site.scrapedData);
+  if (!agent) {
+    throw new Error("Site has corrupted data and cannot be exported");
+  }
+
+  const content = safeJsonParse<GeneratedContent>(site.generatedContent) || getDefaultContent(agent);
+  const customization = safeJsonParse<Customization>(site.customization) || getDefaultCustomization();
 
   const data: SiteExportData = {
     agent,

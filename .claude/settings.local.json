@@ -58,7 +58,8 @@
       "WebFetch(domain:www.zenrows.com)",
       "WebFetch(domain:github.com)",
       "Bash(curl:*)",
-      "Bash(gh repo create:*)"
+      "Bash(gh repo create:*)",
+      "Bash(git push)"
     ]
   }
 }

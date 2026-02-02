@@ -5,7 +5,16 @@ import type { AgentProfile } from "@/lib/services/jina-scraper";
 
 export async function POST(request: Request) {
   try {
-    const { siteId, profile } = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+    const { siteId, profile } = body;
 
     if (!siteId || !profile) {
       return NextResponse.json(

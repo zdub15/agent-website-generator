@@ -35,12 +35,20 @@ export function UrlSubmitForm() {
         body: JSON.stringify({ profileUrl: url }),
       });
 
-      if (!createRes.ok) {
-        const data = await createRes.json();
-        throw new Error(data.error || "Failed to scrape profile");
+      const createText = await createRes.text();
+      let createData;
+      try {
+        createData = JSON.parse(createText);
+      } catch {
+        console.error("Failed to parse response:", createText.substring(0, 200));
+        throw new Error("Invalid response from server");
       }
 
-      const { site, profile } = await createRes.json();
+      if (!createRes.ok) {
+        throw new Error(createData.error || "Failed to scrape profile");
+      }
+
+      const { site, profile } = createData;
       setStatus("Generating content with AI...");
 
       // Step 2: Generate content
@@ -50,9 +58,17 @@ export function UrlSubmitForm() {
         body: JSON.stringify({ siteId: site.id, profile }),
       });
 
+      const generateText = await generateRes.text();
+      let generateData;
+      try {
+        generateData = JSON.parse(generateText);
+      } catch {
+        console.error("Failed to parse generate response:", generateText.substring(0, 200));
+        throw new Error("Invalid response from AI generation");
+      }
+
       if (!generateRes.ok) {
-        const data = await generateRes.json();
-        throw new Error(data.error || "Failed to generate content");
+        throw new Error(generateData.error || "Failed to generate content");
       }
 
       setStatus("Redirecting to preview...");

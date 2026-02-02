@@ -25,8 +25,17 @@ export default function Dashboard() {
   const fetchSites = async () => {
     try {
       const res = await fetch("/api/sites");
-      const data = await res.json();
-      setSites(data.sites || []);
+      if (!res.ok) {
+        console.error("Failed to fetch sites:", res.status, res.statusText);
+        return;
+      }
+      const text = await res.text();
+      try {
+        const data = JSON.parse(text);
+        setSites(data.sites || []);
+      } catch (parseError) {
+        console.error("Failed to parse sites response:", parseError, "Response:", text.substring(0, 200));
+      }
     } catch (error) {
       console.error("Failed to fetch sites:", error);
     } finally {

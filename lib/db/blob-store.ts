@@ -60,7 +60,13 @@ async function getSiteById(id: string): Promise<Site | null> {
       if (blobs.length > 0) {
         const response = await fetch(blobs[0].url);
         if (response.ok) {
-          return await response.json();
+          const text = await response.text();
+          try {
+            return JSON.parse(text);
+          } catch (parseError) {
+            console.error("Error parsing site JSON:", parseError, "Content:", text.substring(0, 100));
+            return null;
+          }
         }
       }
       return null;
@@ -83,10 +89,16 @@ async function getSiteBySlug(slug: string): Promise<Site | null> {
         if (blob.pathname.endsWith(".json")) {
           const response = await fetch(blob.url);
           if (response.ok) {
-            const site: Site = await response.json();
-            console.log("Checking site:", site.slug);
-            if (site.slug === slug) {
-              return site;
+            const text = await response.text();
+            try {
+              const site: Site = JSON.parse(text);
+              console.log("Checking site:", site.slug);
+              if (site.slug === slug) {
+                return site;
+              }
+            } catch (parseError) {
+              console.error("Error parsing site JSON:", parseError, "Content:", text.substring(0, 100));
+              continue;
             }
           }
         }
@@ -110,7 +122,13 @@ async function getAllSites(): Promise<Site[]> {
         if (blob.pathname.endsWith(".json")) {
           const response = await fetch(blob.url);
           if (response.ok) {
-            sites.push(await response.json());
+            const text = await response.text();
+            try {
+              sites.push(JSON.parse(text));
+            } catch (parseError) {
+              console.error("Error parsing site JSON:", parseError, "Content:", text.substring(0, 100));
+              continue;
+            }
           }
         }
       }

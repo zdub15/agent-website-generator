@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/blob-store";
 
+function safeJsonParse<T>(data: string | null | undefined, fallback: T): T {
+  if (!data) return fallback;
+  try {
+    return JSON.parse(data) as T;
+  } catch {
+    console.error("Failed to parse JSON data:", data.substring(0, 100));
+    return fallback;
+  }
+}
+
 // GET - Get single site
 export async function GET(
   request: Request,
@@ -17,15 +27,19 @@ export async function GET(
       return NextResponse.json({ error: "Site not found" }, { status: 404 });
     }
 
+    const scrapedData = safeJsonParse(site.scrapedData, null);
+    if (!scrapedData) {
+      return NextResponse.json(
+        { error: "Site has corrupted data", site },
+        { status: 422 }
+      );
+    }
+
     return NextResponse.json({
       site,
-      scrapedData: JSON.parse(site.scrapedData),
-      generatedContent: site.generatedContent
-        ? JSON.parse(site.generatedContent)
-        : null,
-      customization: site.customization
-        ? JSON.parse(site.customization)
-        : null,
+      scrapedData,
+      generatedContent: safeJsonParse(site.generatedContent, null),
+      customization: safeJsonParse(site.customization, null),
     });
   } catch (error) {
     console.error("Error fetching site:", error);

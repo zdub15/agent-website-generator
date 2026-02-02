@@ -82,11 +82,23 @@ export function CustomizationPanel({
       });
 
       if (!res.ok) {
-        const error = await res.json();
+        const text = await res.text();
+        let error;
+        try {
+          error = JSON.parse(text);
+        } catch {
+          throw new Error("Upload failed: " + text.substring(0, 100));
+        }
         throw new Error(error.error || "Upload failed");
       }
 
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("Invalid response from server");
+      }
       setHeadshotUrl(data.headshotUrl + "?t=" + Date.now()); // Cache bust
       setUploadSuccess(true);
       onHeadshotUploaded?.(data.headshotUrl);
