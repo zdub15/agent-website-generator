@@ -94,8 +94,7 @@ export async function scrapeAgentProfile(profileUrl: string): Promise<AgentProfi
       Authorization: `Bearer ${apiKey}`,
       "X-With-Links-Summary": "true",
       "X-With-Images-Summary": "true",
-      "X-Wait-For-Selector": "img",
-      "X-Timeout": "45",
+      "X-Timeout": "8", // Keep under Vercel's 10s limit
     },
   });
 
@@ -123,119 +122,11 @@ export async function scrapeAgentProfile(profileUrl: string): Promise<AgentProfi
     profile.headshotUrl = null;
   }
 
-  // Try to download and process the headshot if we have a URL
+  // FAST MODE: Skip all image processing to stay under Vercel's 10s timeout
+  // Just keep the URL we found - users can upload a better headshot via customization page
   if (profile.headshotUrl) {
-    const savedUrl = await tryDownloadAndSaveImage(profile.headshotUrl, slug);
-    if (savedUrl) {
-      profile.headshotUrl = savedUrl;
-    }
-  }
-
-  // If no headshot yet, try known ushagent.com image URL patterns
-  if (!profile.headshotUrl && agentCode) {
-    console.log("Trying known URL patterns for agent:", agentCode);
-
-    // Known patterns for ushagent.com profile images
-    const possibleUrls = [
-      `https://www.ushagent.com/Images/AgentPhotos/${agentCode}.jpg`,
-      `https://www.ushagent.com/Images/AgentPhotos/${agentCode}.png`,
-      `https://www.ushagent.com/images/agentphotos/${agentCode.toLowerCase()}.jpg`,
-      `https://www.ushagent.com/Content/AgentPhotos/${agentCode}.jpg`,
-      `https://cdn.ushagent.com/photos/${agentCode}.jpg`,
-    ];
-
-    for (const url of possibleUrls) {
-      const savedUrl = await tryDownloadAndSaveImage(url, slug);
-      if (savedUrl) {
-        profile.headshotUrl = savedUrl;
-        console.log("Found headshot at:", url);
-        break;
-      }
-    }
-  }
-
-  // If we have a base64 image in the markdown, process and save it
-  if (!profile.headshotUrl) {
-    // Look for base64 images - they sometimes appear inline
-    const base64Match = markdown.match(/data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]{1000,})/);
-    if (base64Match) {
-      console.log("Found base64 image in markdown, processing...");
-      try {
-        const imageBuffer = Buffer.from(base64Match[2], "base64");
-
-        if (imageBuffer.length > 5000) {
-          // Use processHeadshotImage for cropping, upscaling, and quality enhancement
-          const processedUrl = await processHeadshotImage(imageBuffer, slug);
-          if (processedUrl) {
-            profile.headshotUrl = processedUrl;
-            console.log("Markdown base64 headshot processed and saved:", processedUrl);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to process base64 image:", error);
-      }
-    }
-  }
-
-  // Try direct HTTP fetch to extract base64 image from HTML (faster than Puppeteer)
-  if (!profile.headshotUrl) {
-    console.log("Attempting direct HTML fetch to extract base64 headshot...");
-    try {
-      const htmlResponse = await fetch(normalizedUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Accept": "text/html",
-        },
-      });
-
-      if (htmlResponse.ok) {
-        const html = await htmlResponse.text();
-        // Look for the PersonalPic image with base64 data
-        const base64ImgMatch = html.match(/id="ContentPlaceHolder1_PAWdata_imgPersonalPic"[^>]*src="(data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+))"/);
-        if (base64ImgMatch) {
-          console.log("Found base64 headshot in HTML!");
-          const base64Content = base64ImgMatch[3];
-          const imageBuffer = Buffer.from(base64Content, "base64");
-
-          if (imageBuffer.length > 5000) {
-            // Use processHeadshotImage for cropping, upscaling, and quality enhancement
-            const processedUrl = await processHeadshotImage(imageBuffer, slug);
-            if (processedUrl) {
-              profile.headshotUrl = processedUrl;
-              console.log("Direct fetch base64 headshot processed and saved:", processedUrl);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.log("Direct HTML fetch failed:", error);
-    }
-  }
-
-  // If still no headshot on Vercel, try serverless Puppeteer (uses free GitHub CDN for Chromium)
-  if (!profile.headshotUrl && isVercel) {
-    console.log("No valid headshot found, attempting serverless Puppeteer scrape...");
-
-    const serverlessHeadshot = await scrapeHeadshotServerless(normalizedUrl, slug);
-    if (serverlessHeadshot) {
-      profile.headshotUrl = serverlessHeadshot;
-      console.log("Headshot scraped with serverless Puppeteer:", serverlessHeadshot);
-    }
-  }
-
-  // If still no headshot and not on Vercel, try Puppeteer
-  if (!profile.headshotUrl && !isVercel) {
-    console.log("No valid headshot found, attempting Puppeteer scrape...");
-
-    const puppeteerHeadshot = await scrapeHeadshotWithPuppeteer(normalizedUrl, slug);
-    if (puppeteerHeadshot) {
-      profile.headshotUrl = puppeteerHeadshot;
-      console.log("Headshot scraped with Puppeteer:", puppeteerHeadshot);
-    }
-  }
-
-  // Log if no headshot found
-  if (!profile.headshotUrl) {
+    console.log("Using headshot URL from scrape:", profile.headshotUrl);
+  } else {
     console.log("No headshot available - user can upload via customization page");
   }
 
